@@ -133,9 +133,9 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
 
 
         final ProgressLogger progress = new ProgressLogger(log);
-        final ExecutorService service = Executors.newCachedThreadPool();
+        final ExecutorService service = Executors.newFixedThreadPool(4);
 
-        List<Object[]> pairs = new ArrayList<>(MAX_PAIRS);
+      List<Object[]> pairs = new ArrayList<>(MAX_PAIRS);
 
         long start = System.currentTimeMillis();
 
@@ -157,13 +157,15 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
             service.submit(new Runnable() {
                 @Override
                 public void run() {
-                    for (Object[] object:
-                            tmpPairs) {
-                        SAMRecord rec1 = (SAMRecord) object[0];
-                        ReferenceSequence ref1 = (ReferenceSequence) object[1];
-                        for (final SinglePassSamProgram program : programs) {
-                            program.acceptRead(rec1, ref1);
-                            progress.record(rec1);
+                    synchronized(programs) {
+                        for (Object[] object :
+                                tmpPairs) {
+                            SAMRecord rec1 = (SAMRecord) object[0];
+                            ReferenceSequence ref1 = (ReferenceSequence) object[1];
+                            for (final SinglePassSamProgram program : programs) {
+                                program.acceptRead(rec1, ref1);
+                                progress.record(rec1);
+                            }
                         }
                     }
                 }
