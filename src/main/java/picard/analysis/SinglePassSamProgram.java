@@ -125,7 +125,7 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
 
 
         final ProgressLogger progress = new ProgressLogger(log);
-
+        long start = System.currentTimeMillis();
         for (final SAMRecord rec : in) {
             final ReferenceSequence ref;
             if (walker == null || rec.getReferenceIndex() == SAMRecord.NO_ALIGNMENT_REFERENCE_INDEX) {
@@ -150,12 +150,15 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
                 break;
             }
         }
-
+        long finish = System.currentTimeMillis();
+        System.out.println("read: "+(finish-start));
         CloserUtil.close(in);
-
+        start=System.currentTimeMillis();
         for (final SinglePassSamProgram program : programs) {
             program.finish();
         }
+        finish = System.currentTimeMillis();
+        System.out.println("finished: "+(finish-start));
     }
 
     /** Can be overriden and set to false if the section of unmapped reads at the end of the file isn't needed. */
