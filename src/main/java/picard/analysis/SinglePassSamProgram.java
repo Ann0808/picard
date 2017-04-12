@@ -47,6 +47,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.Lock;
 
 /**
  * Super class that is designed to provide some consistent structure between subclasses that
@@ -134,7 +136,10 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
 
         final ProgressLogger progress = new ProgressLogger(log);
         final ExecutorService service = Executors.newSingleThreadExecutor();
-
+        final Lock[] mutexes = new Lock[programs.size()];
+        for (int i=0;i<programs.size();i++){
+              mutexes[i]= new ReentrantLock();
+        }
       List<Object[]> pairs = new ArrayList<>(MAX_PAIRS);
 
         long start = System.currentTimeMillis();
@@ -162,7 +167,13 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
                             SAMRecord rec1 = (SAMRecord) object[0];
                             ReferenceSequence ref1 = (ReferenceSequence) object[1];
                             for (final SinglePassSamProgram program : programs) {
-                                program.acceptRead(rec1, ref1);
+                                try{
+                                    program.acceptRead(rec1, ref1);
+                                }
+                                finally {
+
+                                }
+
                                 progress.record(rec1);
                             }
                         }
