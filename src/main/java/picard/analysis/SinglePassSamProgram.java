@@ -42,10 +42,7 @@ import picard.cmdline.Option;
 import picard.cmdline.StandardOptionDefinitions;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.Lock;
@@ -59,7 +56,7 @@ import java.util.concurrent.locks.Lock;
  */
 public abstract class SinglePassSamProgram extends CommandLineProgram {
 
-    public static final int MAX_PAIRS = 1000;
+    public static final int MAX_PAIRS = 1000, CAPACITY=2,SEM=6;
 
 
 
@@ -135,15 +132,58 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
 
 
         final ProgressLogger progress = new ProgressLogger(log);
-        final ExecutorService service = Executors.newSingleThreadExecutor();
+        final ExecutorService service = Executors.newFixedThreadPool(2);
+        BlockingQueue<List<Object[]>> queue= new LinkedBlockingQueue<>(CAPACITY);
+        Semaphore semaphore = new Semaphore(SEM);
         final Lock[] mutexes = new Lock[programs.size()];
         for (int i=0;i<programs.size();i++){
               mutexes[i]= new ReentrantLock();
         }
       List<Object[]> pairs = new ArrayList<>(MAX_PAIRS);
+        List<Object[]> poisonPill = Collections.emptyList();
 
-        long start = System.currentTimeMillis();
+       // long start = System.currentTimeMillis();
 
+        service.execute(new Runnable() {
+
+            @Override
+            public void run() {
+                while (true){
+
+                    try {
+                        final List<Object[]> tmpPairs = queue.take();
+                        if (tmpPairs.isEmpty()) return;
+                        semaphore.acquire();
+                    service.submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            for (Object[] object :
+                                    tmpPairs) {
+                                SAMRecord rec1 = (SAMRecord) object[0];
+                                ReferenceSequence ref1 = (ReferenceSequence) object[1];
+                                int i=0;
+                                for (final SinglePassSamProgram program : programs) {
+                                    mutexes[i].lock();
+                                    try {
+                                        program.acceptRead(rec1, ref1);
+                                    }
+                                    finally {
+                                        mutexes[i].unlock();
+                                        i++;
+                                    }
+
+                                        progress.record(rec1);
+                                }
+                            }
+                            semaphore.release();
+                        }
+                    });
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
 
 
         for (final SAMRecord rec : in) {
@@ -153,32 +193,14 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
             } else {
                 ref = walker.get(rec.getReferenceIndex());
             }
-
             pairs.add(new Object[]{rec,ref});
             if (pairs.size()<MAX_PAIRS)continue;
-            final List<Object[]> tmpPairs = pairs;
-
-            pairs = new ArrayList<>(MAX_PAIRS);
-            service.submit(new Runnable() {
-                @Override
-                public void run() {
-                        for (Object[] object :
-                                tmpPairs) {
-                            SAMRecord rec1 = (SAMRecord) object[0];
-                            ReferenceSequence ref1 = (ReferenceSequence) object[1];
-                            for (final SinglePassSamProgram program : programs) {
-                                try{
-                                    program.acceptRead(rec1, ref1);
-                                }
-                                finally {
-
-                                }
-
-                                progress.record(rec1);
-                            }
-                        }
-                    }
-            });
+            try {
+                queue.put(pairs);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+                pairs=new ArrayList<>(MAX_PAIRS);
 
 
             // See if we need to terminate early?
@@ -199,29 +221,37 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
                         tmpPairs) {
                     SAMRecord rec1 = (SAMRecord) object[0];
                     ReferenceSequence ref1 = (ReferenceSequence) object[1];
+                   int i=0;
                     for (final SinglePassSamProgram program : programs) {
-                        program.acceptRead(rec1, ref1);
+                        mutexes[i].lock();
+                        try{
+                            program.acceptRead(rec1, ref1);
+                        }
+                      finally {
+                            mutexes[i].unlock();
+                            i++;
+                        }
                         progress.record(rec1);
                     }
                 }
             }
         });
         service.shutdown();
-
         try {
+            queue.put(poisonPill);
             service.awaitTermination(1, TimeUnit.DAYS);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        long finish = System.currentTimeMillis();
-        System.out.println("read: "+(finish-start));
+       // long finish = System.currentTimeMillis();
+    //    System.out.println("read: "+(finish-start));
         CloserUtil.close(in);
-        start=System.currentTimeMillis();
+      //  start=System.currentTimeMillis();
         for (final SinglePassSamProgram program : programs) {
             program.finish();
         }
-        finish = System.currentTimeMillis();
-        System.out.println("finished: "+(finish-start));
+      //  finish = System.currentTimeMillis();
+       // System.out.println("finished: "+(finish-start));
     }
 
     /** Can be overriden and set to false if the section of unmapped reads at the end of the file isn't needed. */
