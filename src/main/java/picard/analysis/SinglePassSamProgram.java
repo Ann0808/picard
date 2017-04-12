@@ -56,7 +56,7 @@ import java.util.concurrent.locks.Lock;
  */
 public abstract class SinglePassSamProgram extends CommandLineProgram {
 
-    public static final int MAX_PAIRS = 1000, CAPACITY=2,SEM=6;
+    public static final int MAX_PAIRS = 1000, CAPACITY=2,SEM=3;
 
 
 
