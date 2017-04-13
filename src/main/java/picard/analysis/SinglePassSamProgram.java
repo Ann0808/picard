@@ -56,7 +56,7 @@ import java.util.concurrent.locks.Lock;
  */
 public abstract class SinglePassSamProgram extends CommandLineProgram {
 
-    public static final int MAX_PAIRS = 1000, CAPACITY=2,SEM=3;
+    public static final int MAX_PAIRS = 1000, CAPACITY=10,SEM=4;
 
 
 
@@ -132,7 +132,7 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
 
 
         final ProgressLogger progress = new ProgressLogger(log);
-        final ExecutorService service = Executors.newFixedThreadPool(2);
+        final ExecutorService service = Executors.newFixedThreadPool(4);
         BlockingQueue<List<Object[]>> queue= new LinkedBlockingQueue<>(CAPACITY);
         Semaphore semaphore = new Semaphore(SEM);
         final Lock[] mutexes = new Lock[programs.size()];
@@ -214,6 +214,11 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
             }
         }
         final List<Object[]> tmpPairs = pairs;
+        try {
+            semaphore.acquire();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         service.submit(new Runnable() {
             @Override
             public void run() {
@@ -234,6 +239,7 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
                         progress.record(rec1);
                     }
                 }
+                semaphore.release();
             }
         });
         service.shutdown();
