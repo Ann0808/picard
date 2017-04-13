@@ -130,7 +130,6 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
             anyUseNoRefReads = anyUseNoRefReads || program.usesNoRefReads();
         }
 
-
         final ProgressLogger progress = new ProgressLogger(log);
         final ExecutorService service = Executors.newCachedThreadPool();
         BlockingQueue<List<Object[]>> queue= new LinkedBlockingQueue<>(CAPACITY);
@@ -139,22 +138,18 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
         for (int i=0;i<programs.size();i++){
               mutexes[i]= new ReentrantLock();
         }
-      List<Object[]> pairs = new ArrayList<>(MAX_PAIRS);
+        List<Object[]> pairs = new ArrayList<>(MAX_PAIRS);
         List<Object[]> poisonPill = Collections.emptyList();
-
-       // long start = System.currentTimeMillis();
-
         service.execute(new Runnable() {
 
             @Override
             public void run() {
                 while (true){
-
                     try {
                         final List<Object[]> tmpPairs = queue.take();
                         if (tmpPairs.isEmpty()) return;
                         semaphore.acquire();
-                    service.submit(new Runnable() {
+                        service.submit(new Runnable() {
                         @Override
                         public void run() {
                             for (Object[] object :
@@ -249,15 +244,12 @@ public abstract class SinglePassSamProgram extends CommandLineProgram {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-       // long finish = System.currentTimeMillis();
-    //    System.out.println("read: "+(finish-start));
+
         CloserUtil.close(in);
-      //  start=System.currentTimeMillis();
         for (final SinglePassSamProgram program : programs) {
             program.finish();
         }
-      //  finish = System.currentTimeMillis();
-       // System.out.println("finished: "+(finish-start));
+
     }
 
     /** Can be overriden and set to false if the section of unmapped reads at the end of the file isn't needed. */
